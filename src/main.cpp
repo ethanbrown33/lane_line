@@ -57,10 +57,10 @@ std::vector<cv::Point> draw_curve(cv::Mat image, std::vector<cv::Point> points)
 int main()
 {
     // Load image
-    // std::string image_path = "/root/adc/lane_line/src/images/step0.png";
+    std::string image_path = "/root/adc/lane_line/src/images/step0.png";
     // std::string image_path = "/root/adc/lane_line/src/images/challenge_video_frame_1.jpg";
     // std::string image_path = "/root/adc/lane_line/src/images/harder_challenge_video_frame_10.jpg";
-    std::string image_path = "/root/adc/lane_line/src/images/frame0.jpg";
+    // std::string image_path = "/root/adc/lane_line/src/images/frame0.jpg";
     cv::Mat img_raw = cv::imread(image_path, cv::IMREAD_COLOR);
 
     if (img_raw.empty())
@@ -104,7 +104,7 @@ int main()
     img_canny.copyTo(img_masked, mask);
 
     // Get warp matrices
-    int offset = 200;
+    int offset = 50;
     std::vector<cv::Point2f> imagePoints;
     imagePoints.push_back(cv::Point2f(offset, 0));                  // Top left
     imagePoints.push_back(cv::Point2f(offset, img_height));         // Bottom left
@@ -186,15 +186,48 @@ int main()
     cv::imshow("Image1", img_warped);
 
     // plot curves
-    cv::Mat curveplot = cv::Mat::zeros(img_warped.size(), CV_8UC3);
+    // cv::Mat curveplot = cv::Mat::zeros(img_warped.size(), CV_8UC3);
 
-    std::vector<cv::Point> left_plot = draw_curve(curveplot, windows_left);
-    std::vector<cv::Point> right_plot = draw_curve(curveplot, windows_right);
-    cv::imshow("Image2", curveplot);
+    // std::vector<cv::Point> left_plot = draw_curve(curveplot, windows_left);
+    // std::vector<cv::Point> right_plot = draw_curve(curveplot, windows_right);
+    // cv::imshow("Image2", curveplot);
+
+    // try linear line
+    cv::Mat lineplot = cv::Mat::zeros(img_warped.size(), CV_8UC3);
+
+    cv::Vec4f line_left;
+    cv::fitLine(windows_left, line_left, cv::DIST_L2, 0, 0.01, 0.01);
+
+    float vx = line_left[0];
+    float vy = line_left[1];
+    float x0 = line_left[2];
+    float y0 = line_left[3];
+
+    cv::Point2f point1, point2;
+    point1.x = x0 - 1000 * vx;
+    point1.y = y0 - 1000 * vy;
+    point2.x = x0 + 1000 * vx;
+    point2.y = y0 + 1000 * vy;
+    cv::line(lineplot, point1, point2, cv::Scalar(0, 0, 255), 15, cv::LINE_AA);
+
+    cv::Vec4f line_right;
+    cv::fitLine(windows_right, line_right, cv::DIST_L2, 0, 0.01, 0.01);
+
+    vx = line_right[0];
+    vy = line_right[1];
+    x0 = line_right[2];
+    y0 = line_right[3];
+
+    point1.x = x0 - 1000 * vx;
+    point1.y = y0 - 1000 * vy;
+    point2.x = x0 + 1000 * vx;
+    point2.y = y0 + 1000 * vy;
+    cv::line(lineplot, point1, point2, cv::Scalar(0, 0, 255), 15, cv::LINE_AA);
+
 
     // unwarp image
     cv::Mat img_unwarped;
-    cv::warpPerspective(curveplot, img_unwarped, unwarp_matrix, cv::Size(1200, 900));
+    cv::warpPerspective(lineplot, img_unwarped, unwarp_matrix, cv::Size(1200, 900));
     cv::imshow("Image3", img_unwarped);
 
     // combine images
