@@ -57,8 +57,8 @@ std::vector<cv::Point> draw_curve(cv::Mat image, std::vector<cv::Point> points)
 int main()
 {
     // Load image
-    std::string image_path = "/root/adc/lane_line/src/images/step0.png";
-    // std::string image_path = "/root/adc/lane_line/src/images/challenge_video_frame_1.jpg";
+    // std::string image_path = "/root/adc/lane_line/src/images/step0.png";
+    std::string image_path = "/root/adc/lane_line/src/images/challenge_video_frame_1.jpg";
     // std::string image_path = "/root/adc/lane_line/src/images/harder_challenge_video_frame_10.jpg";
     // std::string image_path = "/root/adc/lane_line/src/images/frame0.jpg";
     cv::Mat img_raw = cv::imread(image_path, cv::IMREAD_COLOR);
@@ -168,8 +168,8 @@ int main()
     }
 
     // sliding windows
-    std::vector<cv::Point> windows_left = slide_windows(img_warped, left_peak, 300, 100);
-    std::vector<cv::Point> windows_right = slide_windows(img_warped, right_peak, 300, 100);
+    std::vector<cv::Point> windows_left = slide_windows(img_warped, left_peak, 100, 100);
+    std::vector<cv::Point> windows_right = slide_windows(img_warped, right_peak, 100, 100);
 
     for (int i = 0; i < windows_left.size(); i++)
     {
@@ -232,7 +232,7 @@ int main()
 
     // combine images
     cv::Mat img_combined;
-    cv::add(img_unwarped, img_resized, img_combined);
+    cv::addWeighted(img_unwarped, 0.5, img_resized, 0.5, 0.0, img_combined);
 
     cv::imshow("Image4", img_combined);
 
@@ -262,6 +262,7 @@ std::vector<cv::Point> slide_windows(cv::Mat img, int x, int box_w, int box_h)
         {
             cv::Scalar mean = cv::mean(nonzero);
             points.push_back(cv::Point(mean[0] + start_col, mean[1] + box_h * i));
+            x = mean[0] + start_col;
         }
     }
 
