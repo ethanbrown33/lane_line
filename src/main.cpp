@@ -2,15 +2,21 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "polyfit.h"
+#include "binarize.h"
+#include "generate.h"
+#include "draw.h"
+#include "birdeye.h"
+
 // Image parameters
-const int IMG_WIDTH = 1200;
-const int IMG_HEIGHT = 900;
+const int IMG_WIDTH = 960;
+const int IMG_HEIGHT = 600;
 
 // Define region of interest (ROI)
-const int ROI_UPPER_BOUND = 650;
-const int ROI_LOWER_BOUND = 830;
-const int ROI_UPPER_WIDTH = 300;
-const int ROI_LOWER_WIDTH = 900;
+const int ROI_UPPER_BOUND = 450;
+const int ROI_LOWER_BOUND = 550;
+const int ROI_UPPER_WIDTH = 275;
+const int ROI_LOWER_WIDTH = 600;
 
 const std::vector<cv::Point2f> ROI_POINTS = {
     cv::Point2f((IMG_WIDTH - ROI_UPPER_WIDTH) / 2, ROI_UPPER_BOUND),
@@ -141,21 +147,36 @@ std::vector<cv::Point> slide_windows(cv::Mat img, int start, int count, int widt
 int main()
 {
     // Load image
-    cv::Mat img = load_image("/root/adc/lane_line/src/images/frame0.jpg");
+    cv::Mat img = load_image("/root/adc/lane_line/src/images/harder_challenge_video_frame_10.jpg");
 
-    // Edge detection
-    cv::Mat edges = detect_edges(img);
+    // Equalize
+    cv::Mat ycrcb;
+
+    cv::cvtColor(img, ycrcb, cv::COLOR_BGR2YCrCb);
+
+    std::vector<cv::Mat> channels;
+    cv::split(ycrcb, channels);
+
+    cv::equalizeHist(channels[0], channels[0]);
+
+    cv::Mat equalized;
+    cv::merge(channels, ycrcb);
+
+    cv::cvtColor(ycrcb, equalized, cv::COLOR_YCrCb2BGR);
+
+    // Thresholding
+    cv::Mat bin = binarize(equalized);
 
     // Warp image
-    cv::Mat warped = warp_image(edges, ROI_POINTS, WARP_POINTS);
+    cv::Mat warped = warp_image(bin, ROI_POINTS, WARP_POINTS);
 
     // Get histogram peaks
     int left_peak = get_hist_peak(warped, 0, IMG_WIDTH / 2);
     int right_peak = get_hist_peak(warped, IMG_WIDTH / 2, IMG_WIDTH);
 
     // Get points with sliding windows
-    std::vector<cv::Point> left_points = slide_windows(warped, left_peak, 20, 100);
-    std::vector<cv::Point> right_points = slide_windows(warped, right_peak, 20, 100);
+    std::vector<cv::Point> left_points = slide_windows(warped, left_peak, 20, 300);
+    std::vector<cv::Point> right_points = slide_windows(warped, right_peak, 20, 300);
 
     // Get poly points
     std::vector<std::vector<cv::Point>> left_contours = {left_points};
@@ -168,19 +189,50 @@ int main()
     cv::approxPolyDP(left_contours[0], approxPolyLeft, epsilon, false);
     cv::approxPolyDP(right_contours[0], approxPolyRight, epsilon, false);
 
-    cv::Mat polyplot = cv::Mat::ones(warped.size(), CV_8UC3);
-    cv::polylines(polyplot, approxPolyLeft, false, cv::Scalar(0, 255, 255), 5);
-    cv::polylines(polyplot, approxPolyRight, false, cv::Scalar(0, 255, 255), 5);
+    std::cout << "Left Points: " << approxPolyLeft << std::endl;
+    std::cout << "Right Points: " << approxPolyRight << std::endl;
+
+    std::vector<float> xs, ys;
+    std::transform(approxPolyLeft.begin(), approxPolyLeft.end(), std::back_inserter(xs), [](const auto &p)
+                   { return p.x; });
+    std::transform(approxPolyLeft.begin(), approxPolyLeft.end(), std::back_inserter(ys), [](const auto &p)
+                   { return p.y; });
+    std::vector<float> coeffs = polyfit_boost(ys, xs, 2);
+    Coefficient left_coeff = Coefficient(coeffs[2], coeffs[1], coeffs[0]);
+
+    for (int i = 0; i < coeffs.size(); i++)
+    {
+        std::cout << "coeffs: " << coeffs[i] << std::endl;
+    }
+
+    // Polylines
+    cv::Mat bev_img = warped.clone();
+    std::vector<cv::Point> lpoints = generate_line_points(bev_img.size(), left_coeff);
+
+    cv::Mat unwarp_m = cv::getPerspectiveTransform(WARP_POINTS, ROI_POINTS);
+
+    // BEVWarper bev { bev_img.size() };
+    std::vector<cv::Point2f> points_f;
+    std::copy(lpoints.begin(), lpoints.end(), std::back_inserter(points_f));
+
+    std::vector<cv::Point2f> unwarped_points;
+    cv::perspectiveTransform(points_f, unwarped_points, unwarp_m);
+
+    std::vector<cv::Point2i> unwarped_points_i;
+    std::copy(unwarped_points.begin(), unwarped_points.end(), std::back_inserter(unwarped_points_i));
 
     // Unwarp image
-    cv::Mat unwarped = warp_image(polyplot, WARP_POINTS, ROI_POINTS);
+    cv::Mat unwarped = warp_image(bev_img, WARP_POINTS, ROI_POINTS);
+    draw_points(unwarped, unwarped_points_i, cv::Scalar(0, 0, 255));
 
     // Combine polylines with original image
     cv::Mat result;
-    cv::addWeighted(img, 0.7, unwarped, 0.3, 0.0, result);
+    cv::addWeighted(img, 0.5, unwarped, 0.5, 0.0, result);
 
     // Display image
-    cv::imshow("Lane Lines", result);
+    cv::imshow("Window 2", bev_img);
+    cv::imshow("Window 3", bin);
+    cv::imshow("Window 4", result);
     int key = cv::waitKey(0);
     std::cout << key << std::endl;
 }
