@@ -7,10 +7,10 @@ class BEVWarper {
 public:
     explicit BEVWarper(const cv::Size& sz) :
         img_size{sz},
-        src { {float(sz.width), float(sz.height)-10},
-              {0, float(sz.height)-10},
-              {546, 460},
-              {732, 460} },
+        src { {820, float(sz.height)-50},
+              {140, float(sz.height)-50},
+              {380, 400},
+              {580, 400} },
         dst { {float(sz.width), float(sz.height)},
               {0, float(sz.height)},
               {0, 0},
